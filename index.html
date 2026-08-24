@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crypto Futures Intelligence — Live Dashboard</title>
+<style>
+:root{--bg:#05090e;--panel:#0d1822;--line:#213241;--text:#edf5fb;--muted:#8494a4;--green:#22d69b;--red:#ff5c70;--yellow:#f4c84a}
+*{box-sizing:border-box}body{margin:0;background:#05090e;color:var(--text);font:13px system-ui,Arial,sans-serif;padding:14px}
+h1{font-size:16px}.muted{color:var(--muted);font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px}
+th{color:#738395;text-align:left;border-bottom:1px solid var(--line);padding:6px}
+td{border-bottom:1px solid #17232e;padding:6px;white-space:nowrap}
+.badge{display:inline-block;padding:3px 6px;border-radius:6px;border:1px solid;font-size:9px;font-weight:800}
+.buy{color:var(--green);border-color:#22d69b55;background:#22d69b12}.sell{color:var(--red);border-color:#ff5c7055;background:#ff5c7012}.wait{color:var(--yellow);border-color:#f4c84a55;background:#f4c84a12}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.lockitem{padding:8px;border-left:3px solid var(--green);background:#0a1917;border-radius:6px;margin:6px 0;font-size:11px}
+.lockitem.sell{border-left-color:var(--red);background:#1a1015}
+.scroll{overflow:auto;max-height:340px}
+button{background:#0b141d;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}
+</style>
+</head>
+<body>
+<h1>Crypto Futures Intelligence — Live (server-side)</h1>
+<div class="muted" id="status">Loading…</div>
+
+<div class="card">
+  <b>Active Auto-Locks</b>
+  <div id="locks">—</div>
+</div>
+
+<div class="card">
+  <b>Signal Desk</b>
+  <div class="scroll"><table><thead><tr><th>Coin</th><th>Mark</th><th>MTF Trend</th><th>Side</th><th>Score</th><th>Conf.</th></tr></thead><tbody id="rows"></tbody></table></div>
+</div>
+
+<div class="card">
+  <b>Auto-Lock History</b>
+  <div class="scroll"><table><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>Status</th><th>Locked</th></tr></thead><tbody id="hist"></tbody></table></div>
+</div>
+
+<script>
+function fmt(n){if(!Number.isFinite(n))return"—";const a=Math.abs(n);if(a>=1000)return n.toLocaleString(undefined,{maximumFractionDigits:2});if(a>=1)return n.toFixed(4);return n.toFixed(6)}
+function sideClass(s){return (s||"").includes("BUY")?"buy":(s||"").includes("SELL")?"sell":"wait"}
+async function refresh(){
+  try{
+    const [status,coins,locks,hist]=await Promise.all([
+      fetch("/api/status").then(r=>r.json()),
+      fetch("/api/coins").then(r=>r.json()),
+      fetch("/api/locks").then(r=>r.json()),
+      fetch("/api/history").then(r=>r.json()),
+    ]);
+    document.getElementById("status").textContent=`Auto-Lock: ${status.auto?"ON":"OFF"} • Last scan: ${status.lastScan?new Date(status.lastScan).toLocaleTimeString():"—"}${status.lastError?" • Error: "+status.lastError:""}`;
+    const lockVals=Object.values(locks);
+    document.getElementById("locks").innerHTML=lockVals.length?lockVals.map(l=>`<div class="lockitem ${l.side==="SELL"?"sell":""}"><b>${l.symbol} ${l.side}</b> • ${l.confidence}%<br>Entry ${fmt(l.entry)} • SL ${fmt(l.sl)} • TP1 ${fmt(l.tp1)} • TP2 ${fmt(l.tp2)}<br><span class="muted">Locked ${new Date(l.lockTime).toLocaleString()}</span></div>`).join(""):"No active locks.";
+    document.getElementById("rows").innerHTML=Object.values(coins).map(a=>a.error?`<tr><td>${a.symbol}</td><td colspan="5">UNAVAILABLE</td></tr>`:`<tr><td>${a.symbol}</td><td>${fmt(a.mark)}</td><td><span class="badge ${sideClass(a.mtf.trend==="BULLISH"?"BUY":a.mtf.trend==="BEARISH"?"SELL":"")}">${a.mtf.trend}</span></td><td><span class="badge ${sideClass(a.side)}">${a.side}</span></td><td>${a.score.toFixed(2)}</td><td>${a.confidence}%</td></tr>`).join("");
+    document.getElementById("hist").innerHTML=hist.map(x=>`<tr><td>${x.symbol}</td><td>${x.side}</td><td>${fmt(x.entry)}</td><td>${x.status}</td><td>${new Date(x.lockTime).toLocaleString()}</td></tr>`).join("");
+  }catch(e){document.getElementById("status").textContent="Failed to reach server: "+e.message}
+}
+refresh();setInterval(refresh,10000);
+</script>
+</body>
+</html>
