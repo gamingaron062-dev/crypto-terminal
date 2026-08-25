@@ -25,6 +25,14 @@ const TFS = Object.keys(TF_CONFIG);
 const TREND_THRESHOLD = 2.15;
 const MIN_SCORE = 3.0;
 const STRONG_SCORE = 5.5;
+// A "trend confirmed" signal (MIN_SCORE) is not the same bar as a "safe enough to actually
+// auto-lock real money against" signal. Real trade history showed most locks closing at SL
+// with confidence sitting around 50-60% — i.e. the tool was locking setups it was itself only
+// mildly sure about. MIN_LOCK_CONFIDENCE adds a second, stricter gate specifically for
+// Auto-Lock (not for what the Signal Desk displays), so only higher-conviction setups get
+// locked and given real Entry/SL/TP — matching the spec's "quality over quantity" rule.
+const MIN_LOCK_CONFIDENCE = 66;
+const MIN_LOCK_DOMINANCE = 0.78;
 
 const STALE_MULTIPLIER = 2;
 const DRIFT_ATR_MULT = 1.5;
@@ -175,6 +183,7 @@ async function getCoin(symbol, cf, serverTime) {
   };
 }
 
-function validForLock(a) { return a && !a.error && a.complete && a.side !== "WAIT" && a.mtf.trend !== "MIXED" && Math.abs(a.score) >= MIN_SCORE && finite(a.entry) && finite(a.sl) && finite(a.tp2) && !a.invalid; }
+function validForLock(a) { return a && !a.error && a.complete && a.side !== "WAIT" && a.mtf.trend !== "MIXED" && Math.abs(a.score) >= MIN_SCORE && a.confidence >= MIN_LOCK_CONFIDENCE && a.mtf.dominance >= MIN_LOCK_DOMINANCE && finite(a.entry) && finite(a.sl) && finite(a.tp2) && !a.invalid; }
 
 module.exports = { SYMBOLS, TFS, TF_CONFIG, DRIFT_ATR_MULT, finite, cycleFetcher, getServerTime, getCoin, validForLock, buildLevels };
+   
